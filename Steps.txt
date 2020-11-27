@@ -1,0 +1,36 @@
+1. Create EKS cluster
+eksctl create cluster -f kubernetes/eks.yaml
+
+2. Setup AWS load balancer controller
+curl -o kubernetes/iam-policy.json https://raw.githubusercontent.com/kubernetes-sigs/aws-load-balancer-controller/main/docs/install/iam_policy.json
+
+aws iam create-policy \
+    --policy-name AWSLoadBalancerControllerIAMPolicy \
+    --policy-document file://kubernetes/iam-policy.json
+
+eksctl create iamserviceaccount \
+  --cluster=ab3test \
+  --namespace=kube-system \
+  --name=aws-load-balancer-controller \
+  --attach-policy-arn=arn:aws:iam::238435206887:policy/AWSLoadBalancerControllerIAMPolicy \
+  --override-existing-serviceaccounts \
+  --approve
+
+kubectl apply -k "github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
+
+helm repo add eks https://aws.github.io/eks-charts
+
+helm upgrade -i aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --set clusterName=ab3test \
+  --set serviceAccount.create=false \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set region=ap-southeast-1 \
+  --set vpcId=vpc-0bf194cde984d7378 \
+  -n kube-system
+
+kubectl get deployment -n kube-system aws-load-balancer-controller
+
+3. Apply deployment, service and ingress
+kubectl apply -f deployment.yaml -f service.yaml -f ingress.yaml
+
+kubectl run -i --tty curl --image=curlimages/curl --restart=Never -- sh   
