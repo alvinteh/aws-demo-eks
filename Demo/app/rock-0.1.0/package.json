@@ -1,0 +1,14 @@
+{
+  "name": "rock",
+  "version": "0.1.0",
+  "author": "Alvin Teh <alvinteh@amazon.com>",
+  "description": "Rock service",
+  "license": "MIT",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "dependencies": {
+    "express": "^4.17.1"
+  }
+}

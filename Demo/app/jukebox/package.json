@@ -1,14 +1,15 @@
 {
-  "name": "service-b",
+  "name": "jukebox",
   "version": "0.1.0",
   "author": "Alvin Teh <alvinteh@amazon.com>",
-  "description": "Service B",
+  "description": "Jukebox",
   "license": "MIT",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "express": "^4.17.1"
+    "express": "^4.17.1",
+    "got": "^11.8.0"
   }
 }

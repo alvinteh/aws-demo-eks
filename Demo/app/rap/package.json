@@ -1,8 +1,8 @@
 {
-  "name": "service-c",
+  "name": "rap",
   "version": "0.1.0",
   "author": "Alvin Teh <alvinteh@amazon.com>",
-  "description": "Service C",
+  "description": "Rap service",
   "license": "MIT",
   "main": "index.js",
   "scripts": {
