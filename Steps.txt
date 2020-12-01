@@ -44,7 +44,16 @@ helm upgrade -i aws-load-balancer-controller eks/aws-load-balancer-controller \
 
 kubectl get deployment -n kube-system aws-load-balancer-controller
 
-5. Setup AWS App Mesh
+5. Setup IAM role for application logging to CloudWatch
+
+eksctl create iamserviceaccount \
+--name logging-service-account \
+--namespace=$NAMESPACE \
+--cluster $CLUSTER \
+--attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy  \
+--approve
+
+6. Setup AWS App Mesh
 kubectl apply -k "https://github.com/aws/eks-charts/stable/appmesh-controller/crds?ref=master"
 
 kubectl create ns appmesh-system
@@ -73,7 +82,7 @@ eksctl create iamserviceaccount \
     --override-existing-serviceaccounts \
     --approve
 
-6. Apply deployment, service and ingress
+7. Apply deployment, service and ingress
 
 kubectl apply -f app.yaml
 

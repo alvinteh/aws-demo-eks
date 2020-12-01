@@ -9,6 +9,7 @@
     "start": "node index.js"
   },
   "dependencies": {
+    "bunyan": "^1.8.14",
     "express": "^4.17.1",
     "got": "^11.8.0"
   }

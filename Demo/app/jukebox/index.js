@@ -1,11 +1,22 @@
+const bunyan = require('bunyan');
 const express = require('express');
 const got = require('got');
 
 const appName = 'Jukebox service';
 const appHost = process.env.APP_HOST || '0.0.0.0';
 const appPort = process.env.APP_PORT || 3000;
+const logLocation = '/var/log/containers/application.log';
 
 const app = express();
+const log = bunyan.createLogger({ name: appName });
+
+try {
+  log.addStream({ level: 'info', stream: process.stdout });
+  log.addStream({ level: 'info', path: logLocation });
+}
+catch (error) {
+  console.log(`Logger initialization failed (${error.name}: ${error.message})`);
+}
 
 app.get('/', (req, res) => {
   res.send(`${appName} is up!`);
@@ -21,7 +32,7 @@ app.get('/rap', async (req, res) => {
     result = `Uh oh! An error occured calling rap (${error.name}: ${error.message})`;
   }
   
-  console.log(`/rap: Responded with "${result}"`)
+  log.info(`/rap: Responded with "${result}"`)
   res.send(result);
 });
 
@@ -35,10 +46,10 @@ app.get('/rock', async (req, res) => {
     result = `Uh oh! An error occured calling rock (${error.name}: ${error.message})`;
   }
   
-  console.log(`/rock: Responded with "${result}"`)
+  log.info(`/rock: Responded with "${result}"`)
   res.send(result);
 });
 
 const server = app.listen(appPort, appHost, () => {
-  console.log(`${appName} started`);
+  log.info(`${appName} started`);
 });
