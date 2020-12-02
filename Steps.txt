@@ -53,7 +53,34 @@ eksctl create iamserviceaccount \
 --attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy  \
 --approve
 
-6. Setup AWS App Mesh
+6. Setup Prometheus and Grafana
+
+# Skippable; kind of useless at the moment
+kubectl apply -f https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/master/k8s-deployment-manifest-templates/deployment-mode/service/cwagent-prometheus/prometheus-eks.yaml
+
+kubectl apply -f monitoring.yaml
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+helm repo add stable https://charts.helm.sh/stable
+
+helm repo update
+
+helm install prometheus prometheus-community/prometheus \
+  --namespace prometheus \
+  --set alertmanager.persistentVolume.storageClass="gp2" \
+  --set server.persistentVolume.storageClass="gp2"
+
+helm install grafana grafana/grafana \
+    --namespace grafana \
+    --set persistence.storageClassName="gp2" \
+    --set persistence.enabled=true \
+    --set adminPassword='username' \
+    --values kubernetes/grafana-values.yaml \
+    --set service.type=LoadBalancer
+
+7. Setup AWS App Mesh
+
 kubectl apply -k "https://github.com/aws/eks-charts/stable/appmesh-controller/crds?ref=master"
 
 kubectl create ns appmesh-system
@@ -82,7 +109,7 @@ eksctl create iamserviceaccount \
     --override-existing-serviceaccounts \
     --approve
 
-7. Apply deployment, service and ingress
+8. Apply deployment, service and ingress
 
 kubectl apply -f app.yaml
 
