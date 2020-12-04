@@ -8,112 +8,33 @@ metadata:
   labels:
     app: ab3test
 #    appmesh.k8s.aws/sidecarInjectorWebhook: enabled
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: aws-observability
+  labels:
+    aws-observability: enabled
 
 
 ############################################################
 # Logging
 ############################################################
 ---
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRole
-metadata:
-  name: fluentd-spring
-rules:
-  - apiGroups: [""]
-    resources:
-      - namespaces
-      - pods
-      - pods/logs
-    verbs: ["get", "list", "watch"]
----
-apiVersion: rbac.authorization.k8s.io/v1beta1
-kind: ClusterRoleBinding
-metadata:
-  name: fluentd-role-binding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: fluentd-spring
-subjects:
-- kind: ServiceAccount
-  name: logging-service-account
-  namespace: ab3test
----
-apiVersion: v1
 kind: ConfigMap
+apiVersion: v1
 metadata:
-  name: fluentd-spring-config
-  namespace: ab3test
-  labels:
-    app: ab3test
+  name: aws-logging
+  namespace: aws-observability
 data:
-  fluent.conf: |
-    @include containers.conf
-    <match fluent.**>
-      @type null
-    </match> 
-  containers.conf: |
-    <source>
-      @type tail
-      @id in_tail_container_logs
-      @label @containers
-      path /var/log/containers/*.log
-      pos_file /usr/local/fluentd-containers.log.pos
-      tag *
-      read_from_head true
-      <parse>
-        @type none
-        # @type json
-        # time_format %Y-%m-%dT%H:%M:%S.%NZ
-      </parse>
-    </source>
- 
-    <label @containers>
-      <filter **>
-        @type kubernetes_metadata
-        @id filter_kube_metadata
-      </filter>
- 
-      <filter **>
-        @type record_transformer
-        @id filter_containers_stream_transformer
-        <record>
-          stream_name springlogs #
-        </record>
-      </filter>
- 
-      <filter **>
-        @type concat
-        key log
-        multiline_start_regexp /^\S/
-        separator ""
-        flush_interval 5
-        timeout_label @NORMAL
-      </filter>
- 
-      <match **>
-        @type relabel
-        @label @NORMAL
-      </match>
-    </label>
- 
-    <label @NORMAL>
-      <match **>
-        @type cloudwatch_logs
-        @id out_cloudwatch_logs_containers
-        region "#{ENV.fetch('REGION')}"
-        log_group_name "/aws/containerinsights/#{ENV.fetch('CLUSTER_NAME')}/ab3test"
-        log_stream_name_key stream_name
-        remove_log_stream_name_key true
-        auto_create_stream true
-        <buffer>
-          flush_interval 5
-          chunk_limit_size 2m
-          queued_chunks_limit_size 32
-          retry_forever true
-        </buffer>
-      </match>
-    </label> 
+  output.conf: |
+    [OUTPUT]
+        Name cloudwatch_logs
+        Match   *
+        region ap-southeast-1
+        log_group_name fluent-bit-cloudwatch
+        log_stream_prefix from-fluent-bit-
+        auto_create_group On
 
 
 ############################################################
@@ -129,8 +50,6 @@ metadata:
     app: ab3test
     service: jukebox
     version: 0.1.0
-  annotations:
-    iam.amazonaws.com/role: logging-service-account
 spec:
   replicas: 3
   selector:
@@ -143,22 +62,11 @@ spec:
         service: jukebox
         version: 0.1.0
     spec:
-      serviceAccount: logging-service-account
-      serviceAccountName: logging-service-account
-      volumes:
-        - name: fluentdconf
-          configMap:
-            name: fluentd-spring-config
-        - name: app-logs
-          emptyDir: {}
       containers:
-      - name: ab3test-container-jukebox-v1
+      - name: app
         image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/jukebox:0.1.0
         ports:
         - containerPort: 3000
-        volumeMounts:
-          - mountPath: /var/log/containers
-            name: app-logs
         resources:
           requests:
             cpu: 200m
@@ -166,46 +74,6 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
-        securityContext:
-          privileged: false
-          readOnlyRootFilesystem: false
-          allowPrivilegeEscalation: false
-      - name: logrotate
-        image: realz/logrotate
-        volumeMounts:
-        - mountPath: /var/log/containers
-          name: app-logs
-        env:
-        - name: CRON_EXPR
-          value: "*/15 * * * *"
-        - name: LOGROTATE_LOGFILES
-          value: "/var/log/containers/*.log"
-        - name: LOGROTATE_FILESIZE
-          value: "50M"
-        - name: LOGROTATE_FILENUM
-          value: "5"
-      - name: fluentd
-        image: fluent/fluentd-kubernetes-daemonset:v1.9.3-debian-cloudwatch-1.0
-        env:
-        - name: REGION
-          value: ap-southeast-1
-        - name: AWS_REGION
-          value: ap-southeast-1
-        - name: CLUSTER_NAME
-          value: ab3test
-        - name: CI_VERSION
-          value: "k8s/1.0.1"
-        resources:
-          limits:
-            memory: 400Mi
-          requests:
-            cpu: 100m
-            memory: 200Mi
-        volumeMounts:
-        - name: fluentdconf
-          mountPath: /fluentd/etc
-        - name: app-logs
-          mountPath: /var/log/containers
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -216,8 +84,6 @@ metadata:
     app: ab3test
     service: rap
     version: 0.1.0
-  annotations:
-    iam.amazonaws.com/role: logging-service-account
 spec:
   replicas: 3
   selector:
@@ -230,22 +96,11 @@ spec:
         service: rap
         version: 0.1.0
     spec:
-      serviceAccount: logging-service-account
-      serviceAccountName: logging-service-account
-      volumes:
-        - name: fluentdconf
-          configMap:
-            name: fluentd-spring-config
-        - name: app-logs
-          emptyDir: {}
       containers:
-      - name: ab3test-container-rap-v1
+      - name: app
         image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/rap:0.1.0
         ports:
         - containerPort: 3000
-        volumeMounts:
-          - mountPath: /var/log/containers
-            name: app-logs
         resources:
           requests:
             cpu: 200m
@@ -253,46 +108,6 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
-        securityContext:
-          privileged: false
-          readOnlyRootFilesystem: false
-          allowPrivilegeEscalation: false
-      - name: logrotate
-        image: realz/logrotate
-        volumeMounts:
-        - mountPath: /var/log/containers
-          name: app-logs
-        env:
-        - name: CRON_EXPR
-          value: "*/15 * * * *"
-        - name: LOGROTATE_LOGFILES
-          value: "/var/log/containers/*.log"
-        - name: LOGROTATE_FILESIZE
-          value: "50M"
-        - name: LOGROTATE_FILENUM
-          value: "5"
-      - name: fluentd
-        image: fluent/fluentd-kubernetes-daemonset:v1.9.3-debian-cloudwatch-1.0
-        env:
-        - name: REGION
-          value: ap-southeast-1
-        - name: AWS_REGION
-          value: ap-southeast-1
-        - name: CLUSTER_NAME
-          value: ab3test
-        - name: CI_VERSION
-          value: "k8s/1.0.1"
-        resources:
-          limits:
-            memory: 400Mi
-          requests:
-            cpu: 100m
-            memory: 200Mi
-        volumeMounts:
-        - name: fluentdconf
-          mountPath: /fluentd/etc
-        - name: app-logs
-          mountPath: /var/log/containers
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -303,8 +118,6 @@ metadata:
     app: ab3test
     service: rock
     version: 0.1.0
-  annotations:
-    iam.amazonaws.com/role: logging-service-account
 spec:
   replicas: 3
   selector:
@@ -317,22 +130,11 @@ spec:
         service: rock
         version: 0.1.0
     spec:
-      serviceAccount: logging-service-account
-      serviceAccountName: logging-service-account
-      volumes:
-        - name: fluentdconf
-          configMap:
-            name: fluentd-spring-config
-        - name: app-logs
-          emptyDir: {}
       containers:
-      - name: ab3test-container-rock-v1
+      - name: app
         image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/rock:0.1.0
         ports:
         - containerPort: 3000
-        volumeMounts:
-          - mountPath: /var/log/containers
-            name: app-logs
         resources:
           requests:
             cpu: 200m
@@ -340,46 +142,7 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
-        securityContext:
-          privileged: false
-          readOnlyRootFilesystem: false
-          allowPrivilegeEscalation: false
-      - name: logrotate
-        image: realz/logrotate
-        volumeMounts:
-        - mountPath: /var/log/containers
-          name: app-logs
-        env:
-        - name: CRON_EXPR
-          value: "*/15 * * * *"
-        - name: LOGROTATE_LOGFILES
-          value: "/var/log/containers/*.log"
-        - name: LOGROTATE_FILESIZE
-          value: "50M"
-        - name: LOGROTATE_FILENUM
-          value: "5"
-      - name: fluentd
-        image: fluent/fluentd-kubernetes-daemonset:v1.9.3-debian-cloudwatch-1.0
-        env:
-        - name: REGION
-          value: ap-southeast-1
-        - name: AWS_REGION
-          value: ap-southeast-1
-        - name: CLUSTER_NAME
-          value: ab3test
-        - name: CI_VERSION
-          value: "k8s/1.0.1"
-        resources:
-          limits:
-            memory: 400Mi
-          requests:
-            cpu: 100m
-            memory: 200Mi
-        volumeMounts:
-        - name: fluentdconf
-          mountPath: /fluentd/etc
-        - name: app-logs
-          mountPath: /var/log/containers
+
 
 ############################################################
 # Services
