@@ -7,7 +7,7 @@ eksctl create cluster -f kubernetes/cluster.yaml
 export CLUSTER=ab3test
 export NAMESPACE=ab3test
 export AWS_REGION=ap-southeast-1
-export VPC_ID=
+export VPC_ID=vpc-0bdb9b98284d0a1d5
 
 kubectl config set-context --current --namespace=ab3test
 
@@ -26,6 +26,11 @@ aws iam create-policy \
 kubectl apply -k "https://github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
 
 # Update AWS account ID in next command
+eksctl utils associate-iam-oidc-provider \
+  --cluster $CLUSTER \
+  --approve
+
+# Update account ID in the next line
 eksctl create iamserviceaccount \
   --cluster=$CLUSTER \
   --namespace=kube-system \
@@ -38,19 +43,19 @@ helm upgrade -i aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set clusterName=$CLUSTER \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set region=ap-southeast-1 \
+  --set region=$AWS_REGION \
   --set vpcId=$VPC_ID \
   -n kube-system
 
 kubectl get deployment -n kube-system aws-load-balancer-controller
 
-5. Setup IAM role for application logging to CloudWatch
+5. Setup IAM role for application logging and App Mesh
 
 eksctl create iamserviceaccount \
---name logging-service-account \
+--name general-service-account \
 --namespace=$NAMESPACE \
 --cluster $CLUSTER \
---attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy  \
+--attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess  \
 --approve
 
 6. Setup Prometheus and Grafana
@@ -83,8 +88,6 @@ helm install grafana grafana/grafana \
 
 kubectl apply -k "https://github.com/aws/eks-charts/stable/appmesh-controller/crds?ref=master"
 
-kubectl create ns appmesh-system
-
 eksctl create iamserviceaccount \
     --cluster $CLUSTER \
     --namespace appmesh-system \
@@ -98,16 +101,10 @@ helm upgrade -i appmesh-controller eks/appmesh-controller \
     --set region=$AWS_REGION \
     --set serviceAccount.create=false \
     --set serviceAccount.name=appmesh-controller
+    --set tracing.enabled=true \
+    --set tracing.provider=x-ray
 
-kubectl get deployment appmesh-controller -n appmesh-system -o json  | jq -r ".spec.template.spec.containers[].image" | cut -f2 -d ':'
-
-eksctl create iamserviceaccount \
-    --cluster $CLUSTER \
-    --namespace $NAMESPACE \
-    --name appmesh-service-account \
-    --attach-policy-arn arn:aws:iam::aws:policy/AWSAppMeshFullAccess \
-    --override-existing-serviceaccounts \
-    --approve
+kubectl get deployments appmesh-controller -n appmesh-system
 
 8. Apply deployment, service and ingress
 
