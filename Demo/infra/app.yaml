@@ -301,10 +301,8 @@ metadata:
     app: ab3test
     service: jukebox
     version: 0.1.0
-  annotations:
-    service.beta.kubernetes.io/aws-load-balancer-type: nlb-ip
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector:
     app: ab3test
     service: jukebox
