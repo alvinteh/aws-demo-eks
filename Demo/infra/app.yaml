@@ -1,5 +1,5 @@
 ############################################################
-# Namespace
+# Namespaces
 ############################################################
 apiVersion: v1
 kind: Namespace
@@ -9,6 +9,33 @@ metadata:
     app: ab3test
     appmesh.k8s.aws/sidecarInjectorWebhook: enabled
     mesh: ab3test-mesh
+---
+kind: Namespace
+apiVersion: v1
+metadata:
+  name: aws-observability
+  labels:
+    aws-observability: enabled
+
+
+############################################################
+# Logging
+############################################################
+---
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: aws-logging
+  namespace: aws-observability
+data:
+  output.conf: |
+    [OUTPUT]
+        Name cloudwatch_logs
+        Match   *
+        region ap-southeast-1
+        log_group_name ab3test
+        log_stream_prefix ab3test-
+        auto_create_group On
 
 
 ############################################################

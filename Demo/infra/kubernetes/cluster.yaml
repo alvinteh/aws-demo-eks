@@ -1,10 +1,11 @@
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
-
 metadata:
   name: ab3test
   region: ap-southeast-1
-
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["*"]
 fargateProfiles:
   - name: default
     selectors:
