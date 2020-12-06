@@ -7,7 +7,7 @@ eksctl create cluster -f kubernetes/cluster.yaml
 export CLUSTER=ab3test
 export NAMESPACE=ab3test
 export AWS_REGION=ap-southeast-1
-export VPC_ID=
+export VPC_ID=vpc-0bdb9b98284d0a1d5
 
 kubectl config set-context --current --namespace=ab3test
 
@@ -26,6 +26,11 @@ aws iam create-policy \
 kubectl apply -k "https://github.com/aws/eks-charts/stable/aws-load-balancer-controller//crds?ref=master"
 
 # Update AWS account ID in next command
+eksctl utils associate-iam-oidc-provider \
+  --cluster $CLUSTER \
+  --approve
+
+# Update account ID in the next line
 eksctl create iamserviceaccount \
   --cluster=$CLUSTER \
   --namespace=kube-system \
@@ -38,27 +43,61 @@ helm upgrade -i aws-load-balancer-controller eks/aws-load-balancer-controller \
   --set clusterName=$CLUSTER \
   --set serviceAccount.create=false \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set region=ap-southeast-1 \
+  --set region=$AWS_REGION \
   --set vpcId=$VPC_ID \
   -n kube-system
 
 kubectl get deployment -n kube-system aws-load-balancer-controller
 
-5. Setup IAM policy for application logging to CloudWatch
+5. Setup IAM policy for CloudWatch logging
 
 aws iam create-policy \
         --policy-name FluentBitEKSFargate \
-        --policy-document file://kubernetes/cloudwatch-iam-policy.json
+        --policy-document file://kubernetes/cloudwatch-iam-policy.json 
 
-# Replace account ID and role-name in next step 
+# Replace account ID and role name in next step
 aws iam attach-role-policy \
-        --policy-arn arn:aws:iam::238435206887:policy/FluentBitEKSFargate \
-        --role-name eksctl-ab3test-cluster-FargatePodExecutionRole-XXXXXXXXXXXX
+        --policy-arn arn:aws:iam::123456789012:policy/FluentBitEKSFargate \
+        --role-name eksctl-fluentbit-cluster-FargatePodExecutionRole-XXXXXXXXXX
 
-6. Setup AWS App Mesh
+6. Setup IAM role for application logging and App Mesh
+
+eksctl create iamserviceaccount \
+--name general-service-account \
+--namespace=$NAMESPACE \
+--cluster $CLUSTER \
+--attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess,arn:aws:iam::123456789012:policy/FluentBitEKSFargate  \
+--approve
+
+7. Setup Prometheus and Grafana
+
+# Skippable; kind of useless at the moment
+kubectl apply -f https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/master/k8s-deployment-manifest-templates/deployment-mode/service/cwagent-prometheus/prometheus-eks.yaml
+
+kubectl apply -f monitoring.yaml
+
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+
+helm repo add stable https://charts.helm.sh/stable
+
+helm repo update
+
+helm install prometheus prometheus-community/prometheus \
+  --namespace prometheus \
+  --set alertmanager.persistentVolume.storageClass="gp2" \
+  --set server.persistentVolume.storageClass="gp2"
+
+helm install grafana grafana/grafana \
+    --namespace grafana \
+    --set persistence.storageClassName="gp2" \
+    --set persistence.enabled=true \
+    --set adminPassword='username' \
+    --values kubernetes/grafana-values.yaml \
+    --set service.type=LoadBalancer
+
+8. Setup AWS App Mesh
+
 kubectl apply -k "https://github.com/aws/eks-charts/stable/appmesh-controller/crds?ref=master"
-
-kubectl create ns appmesh-system
 
 eksctl create iamserviceaccount \
     --cluster $CLUSTER \
@@ -73,18 +112,12 @@ helm upgrade -i appmesh-controller eks/appmesh-controller \
     --set region=$AWS_REGION \
     --set serviceAccount.create=false \
     --set serviceAccount.name=appmesh-controller
+    --set tracing.enabled=true \
+    --set tracing.provider=x-ray
 
-kubectl get deployment appmesh-controller -n appmesh-system -o json  | jq -r ".spec.template.spec.containers[].image" | cut -f2 -d ':'
+kubectl get deployments appmesh-controller -n appmesh-system
 
-eksctl create iamserviceaccount \
-    --cluster $CLUSTER \
-    --namespace $NAMESPACE \
-    --name appmesh-service-account \
-    --attach-policy-arn arn:aws:iam::aws:policy/AWSAppMeshFullAccess \
-    --override-existing-serviceaccounts \
-    --approve
-
-7. Apply deployment, service and ingress
+9. Deploy app
 
 kubectl apply -f app.yaml
 

@@ -1,21 +1,19 @@
 apiVersion: eksctl.io/v1alpha5
 kind: ClusterConfig
-
 metadata:
   name: ab3test
   region: ap-southeast-1
-
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["*"]
 fargateProfiles:
-  - name: fp-default
+  - name: default
     selectors:
-      # All workloads in the "default" Kubernetes namespace will be
-      # scheduled onto Fargate:
       - namespace: default
-      # All workloads in the "kube-system" Kubernetes namespace will be
-      # scheduled onto Fargate:
       - namespace: kube-system
-  - name: fp-dev
+      - namespace: appmesh-system
+  - name: ab3test
     selectors:
-      # All workloads in the "dev" Kubernetes namespace will be
-      # scheduled onto Fargate:
-      - namespace: dev
+      - namespace: ab3test
+iam:
+  withOIDC: true

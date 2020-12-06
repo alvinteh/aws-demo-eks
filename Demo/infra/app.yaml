@@ -1,5 +1,5 @@
 ############################################################
-# Namespace
+# Namespaces
 ############################################################
 apiVersion: v1
 kind: Namespace
@@ -7,7 +7,8 @@ metadata:
   name: ab3test
   labels:
     app: ab3test
-#    appmesh.k8s.aws/sidecarInjectorWebhook: enabled
+    appmesh.k8s.aws/sidecarInjectorWebhook: enabled
+    mesh: ab3test-mesh
 ---
 kind: Namespace
 apiVersion: v1
@@ -32,9 +33,168 @@ data:
         Name cloudwatch_logs
         Match   *
         region ap-southeast-1
-        log_group_name fluent-bit-cloudwatch
-        log_stream_prefix from-fluent-bit-
+        log_group_name ab3test
+        log_stream_prefix ab3test-
         auto_create_group On
+
+
+############################################################
+# App Mesh
+############################################################
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: Mesh
+metadata:
+  name: ab3test-mesh
+spec:
+  namespaceSelector:
+    matchLabels:
+      mesh: ab3test-mesh
+  egressFilter:
+    type: ALLOW_ALL
+
+############################################################
+# App Mesh Virtual Nodes
+############################################################
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualNode
+metadata:
+  name: ab3test-vn-jukebox-v1
+  namespace: ab3test
+spec:
+  podSelector:
+    matchLabels:
+      app: ab3test
+      service: jukebox
+      version: 0.1.0
+  listeners:
+    - portMapping:
+        port: 80
+        protocol: http
+  backends:
+    - virtualService:
+        virtualServiceRef:
+          name: ab3test-vs-rap
+    - virtualService:
+        virtualServiceRef:
+          name: ab3test-vs-rock
+  serviceDiscovery:
+    dns:
+      hostname: ab3test-service-jukebox-v1.ab3test.svc.cluster.local
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualNode
+metadata:
+  name: ab3test-vn-rap-v1
+  namespace: ab3test
+spec:
+  podSelector:
+    matchLabels:
+      app: ab3test
+      service: rap
+      version: 0.1.0
+  listeners:
+    - portMapping:
+        port: 3000
+        protocol: http
+  backends:
+  - virtualService:
+      virtualServiceRef:
+        name: ab3test-vs-jukebox
+  serviceDiscovery:
+    dns:
+      hostname: ab3test-service-rap-v1.ab3test.svc.cluster.local
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualNode
+metadata:
+  name: ab3test-vn-rock-v1
+  namespace: ab3test
+spec:
+  podSelector:
+    matchLabels:
+      app: ab3test
+      service: rock
+      version: 0.1.0
+  listeners:
+    - portMapping:
+        port: 3000
+        protocol: http
+  backends:
+  - virtualService:
+      virtualServiceRef:
+        name: ab3test-vs-jukebox
+  serviceDiscovery:
+    dns:
+      hostname: ab3test-service-rock-v1.ab3test.svc.cluster.local
+
+
+############################################################
+# App Mesh Virtual Services
+############################################################
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualService
+metadata:
+  name: ab3test-vs-jukebox
+  namespace: ab3test
+spec:
+  awsName: ab3test-service-jukebox-v1.ab3test.svc.cluster.local
+  provider:
+    virtualNode:
+      virtualNodeRef:
+        name: ab3test-vn-jukebox-v1
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualService
+metadata:
+  name: ab3test-vs-rap
+  namespace: ab3test
+spec:
+  awsName: ab3test-service-rap-v1.ab3test.svc.cluster.local
+  provider:
+    virtualNode:
+      virtualNodeRef:
+        name: ab3test-vn-rap-v1
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualService
+metadata:
+  name: ab3test-vs-rock
+  namespace: ab3test
+spec:
+  awsName: ab3test-service-rock-v1.ab3test.svc.cluster.local
+  provider:
+    virtualRouter:
+      virtualRouterRef:
+        name: ab3test-vr-rock
+
+
+############################################################
+# App Mesh Virtual Routers
+############################################################
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualRouter
+metadata:
+  name: ab3test-vr-rock
+  namespace: ab3test
+spec:
+  listeners:
+    - portMapping:
+        port: 3000
+        protocol: http
+  routes:
+    - name: rock-v1-route
+      httpRoute:
+        match:
+          prefix: /
+        action:
+          weightedTargets:
+            - virtualNodeRef:
+                name: ab3test-vn-rock-v1
+              weight: 100
 
 
 ############################################################
@@ -51,10 +211,12 @@ metadata:
     service: jukebox
     version: 0.1.0
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: ab3test
+      service: jukebox
+      version: 0.1.0
   template:
     metadata:
       labels:
@@ -62,9 +224,10 @@ spec:
         service: jukebox
         version: 0.1.0
     spec:
+      serviceAccountName: general-service-account
       containers:
       - name: app
-        image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/jukebox:0.1.0
+        image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/jukebox:0.1.3000
         ports:
         - containerPort: 3000
         resources:
@@ -74,6 +237,7 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
+     
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -85,10 +249,12 @@ metadata:
     service: rap
     version: 0.1.0
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: ab3test
+      service: rap
+      version: 0.1.0
   template:
     metadata:
       labels:
@@ -96,6 +262,7 @@ spec:
         service: rap
         version: 0.1.0
     spec:
+      serviceAccountName: general-service-account
       containers:
       - name: app
         image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/rap:0.1.0
@@ -108,6 +275,7 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
+      
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -119,10 +287,12 @@ metadata:
     service: rock
     version: 0.1.0
 spec:
-  replicas: 3
+  replicas: 1
   selector:
     matchLabels:
       app: ab3test
+      service: rock
+      version: 0.1.0
   template:
     metadata:
       labels:
@@ -130,6 +300,7 @@ spec:
         service: rock
         version: 0.1.0
     spec:
+      serviceAccountName: general-service-account
       containers:
       - name: app
         image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/rock:0.1.0
@@ -142,7 +313,7 @@ spec:
           limits:
             cpu: 400m
             memory: 1Gi
-
+     
 
 ############################################################
 # Services
@@ -185,7 +356,7 @@ spec:
     version: 0.1.0
   ports:
     - protocol: TCP
-      port: 80
+      port: 3000
       targetPort: 3000
 ---
 apiVersion: v1
@@ -205,7 +376,7 @@ spec:
     version: 0.1.0
   ports:
     - protocol: TCP
-      port: 80
+      port: 3000
       targetPort: 3000
 
 
