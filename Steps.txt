@@ -55,7 +55,7 @@ aws iam create-policy \
         --policy-name FluentBitEKSFargate \
         --policy-document file://kubernetes/cloudwatch-iam-policy.json 
 
-# Change role name in next step
+# Replace account ID and role name in next step
 aws iam attach-role-policy \
         --policy-arn arn:aws:iam::123456789012:policy/FluentBitEKSFargate \
         --role-name eksctl-fluentbit-cluster-FargatePodExecutionRole-XXXXXXXXXX
@@ -68,7 +68,6 @@ eksctl create iamserviceaccount \
 --cluster $CLUSTER \
 --attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess,arn:aws:iam::123456789012:policy/FluentBitEKSFargate  \
 --approve
-
 
 7. Setup Prometheus and Grafana
 
