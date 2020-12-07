@@ -24,10 +24,10 @@ app.get('/rap', async (req, res) => {
   let result = '';
 
   try {
-    result = (await got('http://ab3test-service-rap-v1:3000')).body;
+    result = (await got('http://service-rap.ab3test.svc.cluster.local:3000')).body;
   }
   catch (error) {
-    result = `Uh oh! An error occured calling rap 3k (${error.name}: ${error.message})`;
+    result = `Uh oh! An error occured calling rap (${error.name}: ${error.message})`;
   }
   
   log.info(`/rap: Responded with "${result}"`)
@@ -38,10 +38,10 @@ app.get('/rock', async (req, res) => {
   let result = '';
 
   try {
-    result = (await got('http://ab3test-service-rock-v1:3000')).body;
+    result = (await got('http://service-rock.ab3test.svc.cluster.local:3000')).body;
   }
   catch (error) {
-    result = `Uh oh! An error occured calling rock 3k (${error.name}: ${error.message})`;
+    result = `Uh oh! An error occured calling rock (${error.name}: ${error.message})`;
   }
   
   log.info(`/rock: Responded with "${result}"`)

@@ -1,0 +1,110 @@
+############################################################
+# App Mesh Virtual Nodes
+############################################################
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualNode
+metadata:
+  name: vn-rock-v2
+  namespace: ab3test
+spec:
+  podSelector:
+    matchLabels:
+      app: ab3test
+      service: rock
+      version: 0.2.0
+  listeners:
+    - portMapping:
+        port: 3000
+        protocol: http
+  serviceDiscovery:
+    dns:
+      hostname: service-rock-v2.ab3test.svc.cluster.local
+
+
+############################################################
+# App Mesh Virtual Routers
+############################################################
+---
+apiVersion: appmesh.k8s.aws/v1beta2
+kind: VirtualRouter
+metadata:
+  name: vr-rock
+  namespace: ab3test
+spec:
+  listeners:
+    - portMapping:
+        port: 3000
+        protocol: http
+  routes:
+    - name: rock-route
+      httpRoute:
+        match:
+          prefix: /
+        action:
+          weightedTargets:
+            - virtualNodeRef:
+                name: vn-rock-v1
+              weight: 50
+            - virtualNodeRef:
+                name: vn-rock-v2
+              weight: 50
+
+
+############################################################
+# Deployments
+############################################################
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: deployment-rock-v2
+  namespace: ab3test
+  labels:
+    app: ab3test
+    service: rock
+    version: 0.2.0
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ab3test
+      service: rock
+      version: 0.2.0
+  template:
+    metadata:
+      labels:
+        app: ab3test
+        service: rock
+        version: 0.2.0
+    spec:
+      serviceAccountName: general-service-account
+      containers:
+      - name: app
+        image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/rock:0.2.0
+        ports:
+        - containerPort: 3000
+
+
+############################################################
+# Services
+############################################################
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: service-rock-v2
+  namespace: ab3test
+  labels:
+    app: ab3test
+    service: rock
+    version: 0.2.0
+spec:
+  type: NodePort
+  selector:
+    app: ab3test
+    service: rock
+    version: 0.2.0
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000

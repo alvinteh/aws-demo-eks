@@ -1,0 +1,22 @@
+############################################################
+# Ingress
+############################################################
+---
+apiVersion: extensions/v1beta1
+kind: Ingress
+metadata:
+  namespace: ab3test
+  name: ingress-jukebox
+  annotations:
+    alb.ingress.kubernetes.io/group.name: ab3test
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    kubernetes.io/ingress.class: alb
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /*
+            backend:
+              serviceName: service-jukebox-v1
+              servicePort: 80
