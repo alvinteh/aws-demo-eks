@@ -125,6 +125,12 @@ eksctl create iamserviceaccount \
 --approve
 ```
 
+4. Setup ConfigMap
+
+```
+kubectl apply -f kubernetes/cloudwatch-logging.yaml
+```
+
 ## 4. Setup App Mesh
 
 1. Setup namespaces
