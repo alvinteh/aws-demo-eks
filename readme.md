@@ -36,7 +36,7 @@ export AWS_REGION=ap-southeast-1
 cd demo/infra
 
 # Update {{CLUSTER}} in the file before running the next command
-eksctl create cluster -f kubernetes/cluster.yaml
+eksctl create cluster -f setup/cluster.yaml
 ```
 
 3. Set namespace for current context
@@ -105,7 +105,7 @@ kubectl get deployment -n kube-system aws-load-balancer-controller
 ```
 aws iam create-policy \
         --policy-name FluentBitEKSFargate \
-        --policy-document file://kubernetes/cloudwatch-iam-policy.json 
+        --policy-document file://setup/cloudwatch-iam-policy.json 
 ```
 
 2. Attach IAM policy to IAM role for Fargate
@@ -128,14 +128,14 @@ eksctl create iamserviceaccount \
 4. Setup ConfigMap
 
 ```
-kubectl apply -f kubernetes/cloudwatch-logging.yaml
+kubectl apply -f setup/cloudwatch-logging.yaml
 ```
 
 ## 4. Setup App Mesh
 
 1. Setup namespaces
 ```
-kubectl apply -f kubernetes/namespaces.yaml
+kubectl apply -f setup/namespaces.yaml
 ```
 
 2. Add CRDs
@@ -170,10 +170,9 @@ helm upgrade -i appmesh-controller eks/appmesh-controller \
 kubectl get deployments appmesh-controller -n appmesh-system
 ```
 
-## 5. Setup Prometheus and Grafana
+## 5. Setup Prometheus and Grafana (skip section)
 
 ```
-# Skippable; kind of useless at the moment
 kubectl apply -f https://raw.githubusercontent.com/aws-samples/amazon-cloudwatch-container-insights/master/k8s-deployment-manifest-templates/deployment-mode/service/cwagent-prometheus/prometheus-eks.yaml
 
 kubectl apply -f monitoring.yaml
@@ -194,7 +193,7 @@ helm install grafana grafana/grafana \
     --set persistence.storageClassName="gp2" \
     --set persistence.enabled=true \
     --set adminPassword='username' \
-    --values kubernetes/grafana-values.yaml \
+    --values setup/grafana-values.yaml \
     --set service.type=LoadBalancer
 ```
 
