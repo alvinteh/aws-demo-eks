@@ -14,6 +14,6 @@ fargateProfiles:
       - namespace: appmesh-system
   - name: app
     selectors:
-      - namespace: {{NAMESPACE}}
+      - namespace: ab3test
 iam:
   withOIDC: true

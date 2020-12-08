@@ -14,6 +14,8 @@ Ensure you have the following installed:
 - [eksctl](https://eksctl.io/introduction/#installation)
 - [kubectl](https://kubernetes.io/docs/tasks/tools/install-kubectl/)
 - [Docker](https://www.docker.com/)
+- [Helm](https://helm.sh/docs/intro/install/)
+- [jq](https://stedolan.github.io/jq/download/) (optional: this is only needed to parse the JSON output for one command)
 
 Having the [ECR Credential Helper](https://github.com/awslabs/amazon-ecr-credential-helper) installed is also recommended for ease of pulling/pushing images to ECR.
 
@@ -33,7 +35,7 @@ export AWS_REGION=ap-southeast-1
 ```
 cd demo/infra
 
-# Update {{NAMESPACE}} and {{CLUSTER}} in the file before running the next command
+# Update {{CLUSTER}} in the file before running the next command
 eksctl create cluster -f kubernetes/cluster.yaml
 ```
 
@@ -108,10 +110,9 @@ aws iam create-policy \
 
 2. Attach IAM policy to IAM role for Fargate
 ```
-# Update role name in the next command
 aws iam attach-role-policy \
         --policy-arn arn:aws:iam::$AWS_ACCOUNT_ID:policy/FluentBitEKSFargate \
-        --role-name eksctl-fluentbit-cluster-FargatePodExecutionRole-XXXXXXXXXX
+        --role-name $(cut -d "/" -f2 <<< $(sed 's/"//g' <<< $(eksctl get fargateprofile --cluster $CLUSTER -o json | jq ".[0].podExecutionRoleARN")))
 ```
 
 3. Setup IAM role for CloudWatch logging and App Mesh
@@ -120,21 +121,23 @@ eksctl create iamserviceaccount \
 --name general-service-account \
 --namespace=$NAMESPACE \
 --cluster $CLUSTER \
---attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess,arn:aws:iam::123456789012:policy/FluentBitEKSFargate  \
+--attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess,arn:aws:iam::$AWS_ACCOUNT_ID:policy/FluentBitEKSFargate  \
 --approve
 ```
 
-4. Setup namespaces
+## 4. Setup App Mesh
+
+1. Setup namespaces
 ```
 kubectl apply -f kubernetes/namespaces.yaml
 ```
 
-5. Setup AWS App Mesh
+2. Add CRDs
 ```
 kubectl apply -k "https://github.com/aws/eks-charts/stable/appmesh-controller/crds?ref=master"
 ```
 
-6. Setup IAM role and Kubernetes service account
+3. Setup IAM role and Kubernetes service account
 ```
 eksctl create iamserviceaccount \
     --cluster $CLUSTER \
@@ -145,7 +148,7 @@ eksctl create iamserviceaccount \
     --approve
 ```
 
-7. Install Helm chart
+4. Install Helm chart
 ```
 helm upgrade -i appmesh-controller eks/appmesh-controller \
     --namespace appmesh-system \
@@ -156,12 +159,12 @@ helm upgrade -i appmesh-controller eks/appmesh-controller \
     --set tracing.provider=x-ray
 ```
 
-8. Check installation
+5. Check installation
 ```
 kubectl get deployments appmesh-controller -n appmesh-system
 ```
 
-## 4. Setup Prometheus and Grafana
+## 5. Setup Prometheus and Grafana
 
 ```
 # Skippable; kind of useless at the moment
@@ -189,11 +192,11 @@ helm install grafana grafana/grafana \
     --set service.type=LoadBalancer
 ```
 
-## 5. Deploy application
+## 6. Deploy application
 
 1. Deploy app
 ```
-kubectl apply -f infra/app.yaml
+kubectl apply -f app.yaml
 ```
 
 2. Deploy ingress
@@ -203,7 +206,7 @@ kubectl apply -f s1-ingress.yaml
 
 3. Deploy canary release
 ```
-kubectl apply s2-canary.yaml
+kubectl apply -f s2-canary.yaml
 ```
 
 ## Useful snippets for debugging
