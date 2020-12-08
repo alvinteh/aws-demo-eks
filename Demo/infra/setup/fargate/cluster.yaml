@@ -1,0 +1,19 @@
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+metadata:
+  name: {{CLUSTER}}
+  region: ap-southeast-1
+cloudWatch:
+  clusterLogging:
+    enableTypes: ["*"]
+fargateProfiles:
+  - name: default
+    selectors:
+      - namespace: default
+      - namespace: kube-system
+      - namespace: appmesh-system
+  - name: app
+    selectors:
+      - namespace: ab3test
+iam:
+  withOIDC: true

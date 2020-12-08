@@ -99,7 +99,7 @@ helm upgrade -i aws-load-balancer-controller eks/aws-load-balancer-controller \
 kubectl get deployment -n kube-system aws-load-balancer-controller
 ```
 
-## 3. Setup CloudWatch logging
+## 3. Setup CloudWatch logging (for Fargate)
 
 1. Setup IAM policy for CloudWatch logging
 ```
@@ -124,6 +124,33 @@ eksctl create iamserviceaccount \
 --attach-policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy,arn:aws:iam::aws:policy/AWSAppMeshFullAccess,arn:aws:iam::$AWS_ACCOUNT_ID:policy/FluentBitEKSFargate  \
 --approve
 ```
+
+## 3. Setup CloudWatch logging (for Managed Node Groups)
+
+1. Attach CloudWatchAgentServerPolicy IAM policy to IAM role for service account
+```
+aws iam attach-role-policy
+  --policy-arn arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy
+  -- role-name $(eksctl get iamserviceaccount --cluster ab3-ci | awk '/aws-node/ {print $3}' | cut -d "/" -f2)
+```
+
+2. Setup Cloudwatch Container Insights
+```
+kubectl apply -f setup/managed-nodegroups/cloudwatch-ci.yaml
+```
+
+3. Setup CloudWatch logging ConfigMap
+```
+kubectl create configmap cluster-info \
+--from-literal=cluster.name=$CLUSTER \
+--from-literal=logs.region=$AWS_REGION -n amazon-cloudwatch
+```
+
+4. Setup CloudWatch logging
+```
+kubectl apply -f setup/managed-nodegroups/cloudwatch-logging.yaml
+```
+
 
 ## 4. Setup App Mesh
 
