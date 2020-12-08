@@ -186,7 +186,7 @@ spec:
       serviceAccountName: general-service-account
       containers:
       - name: app
-        image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/jukebox:0.2.0
+        image: 238435206887.dkr.ecr.ap-southeast-1.amazonaws.com/jukebox:0.1.0
         ports:
         - containerPort: 3000
 ---
