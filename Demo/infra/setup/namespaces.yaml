@@ -9,10 +9,3 @@ metadata:
     app: ab3test
     appmesh.k8s.aws/sidecarInjectorWebhook: enabled
     mesh: ab3test-mesh
----
-kind: Namespace
-apiVersion: v1
-metadata:
-  name: aws-observability
-  labels:
-    aws-observability: enabled
